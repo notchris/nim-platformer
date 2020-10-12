@@ -1,4 +1,4 @@
-import sdl2, sdl2/ttf, basic2d, times, json, colors, os, strutils, random
+import sdl2, sdl2/ttf, basic2d, times, json, colors, os, strutils
 
 # Types
 type
@@ -38,9 +38,11 @@ type
     levels: seq[string]
     camera: Vector2d
     active: bool
+    fonts: seq[FontPtr]
     fontA: FontPtr
     fontB: FontPtr
     fontC: FontPtr
+    emoji: FontPtr
 
 template sdlFailIf(cond: typed, reason: string) =
   if cond: raise SDLException.newException(
@@ -88,18 +90,63 @@ proc getLevels(): seq =
     arr.add(s)
   result = arr
 
-proc loadLevel(): Level =
-  var data = json.parseFile("levels/1.json")
-  var lev = Level()
-  lev.id = data["id"].getInt
-  lev.title = data["title"].str
-  lev.spawn = point2d(
-      data["spawn"]["x"].getFloat,
-      data["spawn"]["y"].getFloat
-  )
-  lev.blocks = newSeq[Block]()
+proc loadFonts(): seq[FontPtr] =
+  # define fonts
+  var sourceSm = openFont("SourceSansProBold.ttf", 24)
+  var sourceMd = openFont("SourceSansProBold.ttf", 32)
+  var sourceLg = openFont("SourceSansProBold.ttf", 48)
+  # var emoji = openFont("NotoColorEmoji.ttf", 32)
 
-  for i in data["blocks"]:
+  # If the fonts fail to load
+  sdlFailIf sourceSm.isNil: "Failed to load font"
+  sdlFailIf sourceMd.isNil: "Failed to load font"
+  sdlFailIf sourceLg.isNil: "Failed to load font"
+
+  # Add fonts
+  result.add(sourceSm)
+  result.add(sourceMd)
+  result.add(sourceLg)
+
+proc loadLevel(): Level =
+  var data = json.parseFile("levels/testA.json")
+  var lev = Level()
+
+  lev.blocks = newSeq[Block]()
+  lev.id = 1
+  lev.title = "Test Level"
+  lev.spawn = point2d(
+      100,
+      100
+  )
+
+  for layer in data["layers"]:
+    if layer["name"].str == "Platform":
+      for obj in layer["objects"]:
+        var b = Block()
+        b.size = vector2d(
+          obj["width"].getFloat,
+          obj["height"].getFloat
+        )
+        b.pos = point2d(
+          obj["x"].getFloat,
+          obj["y"].getFloat
+        )
+        if obj.contains("properties"):
+          for prop in obj["properties"]:
+            if prop["name"].str == "fill":
+              var fill = prop["value"].str
+              b.fill = parseColor(fill)
+        else:
+          b.fill = parseColor("#CCCCCC")
+        lev.blocks.add(b)
+    elif layer["name"].str == "Spawn":
+      lev.spawn = point2d(
+        layer["objects"][0]["x"].getFloat,
+        layer["objects"][0]["y"].getFloat
+      )
+
+
+#[  for i in data["blocks"]:
     var b = Block()
     b.size = vector2d(
       i["width"].getFloat,
@@ -111,6 +158,7 @@ proc loadLevel(): Level =
     )
     b.fill = parseColor(i["fill"].str)
     lev.blocks.add(b)
+]#
   result = lev
 
 proc newGame(renderer: RendererPtr): Game =
@@ -119,11 +167,7 @@ proc newGame(renderer: RendererPtr): Game =
   result.player = newPlayer()
   result.level = loadLevel()
   result.levels = getLevels()
-  result.fontA = openFont("SourceSansProBold.ttf", 32)
-  result.fontB = openFont("SourceSansProBold.ttf", 64)
-  result.fontC = openFont("SourceSansProBold.ttf", 20)
-  sdlFailIf result.fontA.isNil: "Failed to load font"
-  sdlFailIf result.fontB.isNil: "Failed to load font"
+  result.fonts = loadFonts()
 
   result.player.pos = result.level.spawn
 
@@ -227,20 +271,20 @@ proc mainScene (game: Game, renderer: RendererPTR) =
   const white = color(255, 255, 255, 255)
   const black = color(0, 0, 0, 255)
   const red = color(255, 0, 0, 255)
-  const flicker = [white, white, white, white, white, white, black]
-  # const multicolor = color(rand(255), rand(255), rand(255), 255)
-  var r = rand(flicker.len - 1)
+  # const flicker = [white, white, white, white, white, white, black]
+  # var multicolor = color(rand(255), rand(255), rand(255), 255)
+  # var r = rand(flicker.len - 1)
 
-  game.renderText(game.fontC, "notchris presents:", 50, 56, flicker[r])
-  game.renderText(game.fontB, "PLATFORMER", 50, 70, white)
-  game.renderText(game.fontA, "________________________", 54, 110, white)
-  game.renderText(game.fontA, "SELECT LEVEL", 50, 150, white)
+  # game.renderText(game.fonts, "⛰️", 20, 56, white)
+  game.renderText(game.fonts[2], "PLATFORMER", 160, 70, white)
+  game.renderText(game.fonts[1], "________________________", 160, 110, white)
+  game.renderText(game.fonts[0], "SELECT LEVEL", 160, 150, white)
   
 
   var idx = 0
   for l in game.levels:
     idx.inc()
-    game.renderText(game.fontA, l, 50, cint(170 + (idx * 30)), red)
+    game.renderText(game.fonts[0], l, 50, cint(170 + (idx * 30)), red)
 
 proc render(game: Game) =
   if game.active == false:
