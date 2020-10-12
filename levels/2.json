@@ -1,0 +1,21 @@
+{
+    "id": 2,
+    "title": "Level 2",
+    "spawn": {
+        "x": 300,
+        "y": 40
+    },
+    "blocks": [{
+        "x": 0,
+        "y": 500,
+        "width": 100,
+        "height": 100,
+        "fill": "yellow"
+    },{
+        "x": 300,
+        "y": 300,
+        "width": 20,
+        "height": 60,
+        "fill": "green"
+    }]
+}
