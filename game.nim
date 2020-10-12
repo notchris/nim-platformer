@@ -28,6 +28,11 @@ type
     spawn: Point2d
     blocks: seq[Block]
     
+  Button = ref object
+    id: int
+    label: string
+    pos: Point2d
+    size: Vector2d
 
   Game = ref object
     inputs: array[Input, bool]
@@ -39,16 +44,24 @@ type
     camera: Vector2d
     active: bool
     fonts: seq[FontPtr]
-    fontA: FontPtr
-    fontB: FontPtr
-    fontC: FontPtr
-    emoji: FontPtr
+    buttons: seq[Button]
+
 
 template sdlFailIf(cond: typed, reason: string) =
   if cond: raise SDLException.newException(
     reason & ", SDL error: " & $getError())
 
 # Procedures
+
+proc renderButton (renderer: RendererPtr, button: Button) =
+      var rect: Rect = (
+          x: cint(button.pos.x),
+          y: cint(button.pos.y),
+          w: cint(button.size.x),
+          h: cint(button.size.y)
+      )
+      renderer.setDrawColor(255,0,0,255)
+      renderer.fillRect(rect)
 
 proc renderText(renderer: RendererPtr, font: FontPtr, text: string,
                 x, y: cint, color: sdl2.Color) =
@@ -95,17 +108,19 @@ proc loadFonts(): seq[FontPtr] =
   var sourceSm = openFont("SourceSansProBold.ttf", 24)
   var sourceMd = openFont("SourceSansProBold.ttf", 32)
   var sourceLg = openFont("SourceSansProBold.ttf", 48)
-  # var emoji = openFont("NotoColorEmoji.ttf", 32)
+  var emoji = openFont("NotoColorEmoji.ttf", 32)
 
   # If the fonts fail to load
   sdlFailIf sourceSm.isNil: "Failed to load font"
   sdlFailIf sourceMd.isNil: "Failed to load font"
   sdlFailIf sourceLg.isNil: "Failed to load font"
+  sdlFailIf emoji.isNil: "Failed to load font"
 
   # Add fonts
   result.add(sourceSm)
   result.add(sourceMd)
   result.add(sourceLg)
+  result.add(emoji)
 
 proc loadLevel(): Level =
   var data = json.parseFile("levels/testA.json")
@@ -161,6 +176,19 @@ proc loadLevel(): Level =
 ]#
   result = lev
 
+proc createButtons (game: Game): seq[Button] =
+    var arr = newSeq[Button]()
+
+    var buttonA = Button()
+    buttonA.id = 1
+    buttonA.label = "Start Level"
+    buttonA.pos = point2d(100,100)
+    buttonA.size = vector2d(140,80)
+
+    arr.add(buttonA)
+
+    result = arr
+
 proc newGame(renderer: RendererPtr): Game =
   new result
   result.renderer = renderer
@@ -168,6 +196,7 @@ proc newGame(renderer: RendererPtr): Game =
   result.level = loadLevel()
   result.levels = getLevels()
   result.fonts = loadFonts()
+  result.buttons = result.createButtons()
 
   result.player.pos = result.level.spawn
 
@@ -198,11 +227,12 @@ proc handleInput(game: Game) =
     of MouseButtonDown:
       var b = event.button.button
       if b == 1:
-        var v = Vec2()
-        v.x = event.evMouseButton.x
-        v.y = event.evMouseButton.y
-        game.mouse = v
         game.mouseDown()
+    of MouseMotion:
+      var v = Vec2()
+      v.x = event.evMouseMotion.x
+      v.y = event.evMouseMotion.y
+      game.mouse = v
     else:
       discard
 
@@ -265,6 +295,10 @@ proc align(player: Player, rect: Block) =
     else:
       return
 
+proc containsPointer (game: Game, rect: Rect): bool =
+  result = rect.x <= game.mouse.x and game.mouse.x <= rect.x + rect.w and
+           rect.y <= game.mouse.y and game.mouse.y <= rect.y + rect.h
+
 proc mainScene (game: Game, renderer: RendererPTR) =
   renderer.setDrawColor(0, 0, 0, 255)
   renderer.clear()
@@ -275,12 +309,26 @@ proc mainScene (game: Game, renderer: RendererPTR) =
   # var multicolor = color(rand(255), rand(255), rand(255), 255)
   # var r = rand(flicker.len - 1)
 
-  # game.renderText(game.fonts, "⛰️", 20, 56, white)
+  game.renderText(game.fonts[3], "⛰️", 20, 56, white)
   game.renderText(game.fonts[2], "PLATFORMER", 160, 70, white)
   game.renderText(game.fonts[1], "________________________", 160, 110, white)
   game.renderText(game.fonts[0], "SELECT LEVEL", 160, 150, white)
-  
 
+  for button in game.buttons:
+    renderer.renderButton(button)
+
+    var bbox: Rect = (
+      x: cint(button.pos.x),
+      y: cint(button.pos.y),
+      w: cint(button.size.x),
+      h: cint(button.size.y)
+    )
+    
+    if game.containsPointer(bbox):
+      game.renderText(game.fonts[0], button.label, cint(button.pos.x), cint(button.pos.y), white)
+    else:
+      game.renderText(game.fonts[0], button.label, cint(button.pos.x), cint(button.pos.y), black)
+  
   var idx = 0
   for l in game.levels:
     idx.inc()
